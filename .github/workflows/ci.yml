@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # This package declares platforms: [.macOS("26.0")], so it will not build on an
+    # older image. Pin the runner rather than tracking macos-latest, which moves.
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build --build-tests
+
+      - name: Test
+        run: swift test
+
+  # The test suite never touches a real file, so it proves nothing about the packaged
+  # binary. This job runs the real packaging script, which carries its own guards for
+  # the failures that are invisible until install time — chiefly that the Info.plist
+  # survives linking and signing, since TCC identifies the server by it and macOS denies
+  # folder access with no prompt at all when it is missing.
+  package:
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # A runner holds no signing certificate, so pack.sh signs ad hoc. The bundle it
+      # makes here is a BUILD CHECK, not something to hand anyone: an ad-hoc signature
+      # carries no designated requirement, so macOS keys the folder grant to the binary's
+      # hash and re-prompts after every rebuild. What it does prove is that pack.sh still
+      # works end to end and that every guard inside it still passes.
+      - name: Build, sign and pack
+        run: ./scripts/pack.sh
+
+      - name: Bundle holds what the manifest describes
+        run: |
+          unzip -l dist/apple-pdf-mcp.mcpb
+          for entry in manifest.json icon.png server/apple-pdf-mcp; do
+            unzip -l dist/apple-pdf-mcp.mcpb | grep -q "$entry" \
+              || { echo "::error::$entry missing from the bundle"; exit 1; }
+          done
+
+      # Apple silicon only, deliberately. A stray --arch would show up here.
+      - name: Binary is arm64
+        run: |
+          archs=$(lipo -archs extension/server/apple-pdf-mcp)
+          echo "architectures: $archs"
+          [ "$archs" = "arm64" ] \
+            || { echo "::error::expected arm64 only, got: $archs"; exit 1; }
+
+      # Claude Desktop reads the manifest, TCC reads the plist, and the server reports the
+      # third. Three files, one version: a mismatch is silent everywhere but here.
+      - name: Version agrees across manifest, Info.plist and Server.swift
+        run: |
+          manifest=$(plutil -extract version raw -o - extension/manifest.json)
+          plist=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          source=$(grep -o 'version = "[^"]*"' Sources/PDFMCPCore/Server.swift | head -1 | cut -d'"' -f2)
+          echo "manifest=$manifest plist=$plist source=$source"
+          [ "$manifest" = "$plist" ] && [ "$plist" = "$source" ] \
+            || { echo "::error::version mismatch — these three must agree"; exit 1; }
+
+      - name: Upload bundle for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-pdf-mcp-mcpb-adhoc-signed
+          path: dist/apple-pdf-mcp.mcpb
+          retention-days: 14

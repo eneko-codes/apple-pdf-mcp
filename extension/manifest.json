@@ -1,0 +1,127 @@
+{
+  "manifest_version": "0.3",
+  "name": "apple-pdf-mcp",
+  "display_name": "PDF",
+  "version": "1.0.0",
+  "description": "Full PDFKit read/write access — text, search, page assembly, annotations, forms, encryption, metadata, rendering and redaction",
+  "long_description": "A local MCP server written in Swift for full PDF interaction through PDFKit — not just extracting text. Reading: text page by page, the bookmark outline, document metadata, full-text search, listing existing annotations and form fields. Writing: page assembly (merge, reorder, extract, split, delete, rotate), adding/removing/searching-and-highlighting annotations, filling AcroForm fields (with optional flattening), encryption and permissions, metadata editing, page rendering to PNG, and redaction.\n\nEvery tool that changes a PDF writes its result to a new path and never touches the file(s) it read.\n\npdf_redact_pages is worth understanding before use: it does not merely paint over the given rectangles, which would leave the original text extractable underneath. It rasterizes each affected page whole after painting, replacing it with a plain image — a redacted page loses its entire text layer, not just the redacted area. That is the only way public PDFKit makes redaction genuinely irreversible; there is no middle option.\n\nTwo things public PDFKit cannot do, so this server does not pretend to: a real cryptographic signature (no public API attaches one), and redaction without the whole-page rasterization trade-off above.\n\nA PDF with no text layer at all is a scan. This server says so explicitly instead of returning empty pages rather than guessing; reading the pixels is text recognition, which this server does not do.\n\nThe two folder lists below are the ONE deliberate exception to \"nothing to configure\": together they are the security boundary itself, not a preference, so there is no sensible default to hardcode in their place. Leaving either blank means nothing is reachable through it; guessing one would mean guessing what may be exposed. Being allowed to read a folder's PDFs does not by itself allow writing into it — the lists are independent.\n\nA password-protected PDF is refused by every read tool unless the correct password is given as that tool's own argument; the write tools do not accept a password for their input yet.\n\nNot affiliated with or endorsed by Apple Inc.",
+  "author": {
+    "name": "eneko-codes",
+    "url": "https://github.com/eneko-codes"
+  },
+  "homepage": "https://github.com/eneko-codes/apple-pdf-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eneko-codes/apple-pdf-mcp"
+  },
+  "license": "MIT",
+  "icon": "icon.png",
+  "keywords": [
+    "pdf",
+    "pdfkit",
+    "documents",
+    "macos"
+  ],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/apple-pdf-mcp",
+    "mcp_config": {
+      "command": "${__dirname}/server/apple-pdf-mcp",
+      "args": [
+        "--read-roots",
+        "${user_config.read_roots}",
+        "--write-roots",
+        "${user_config.write_roots}"
+      ],
+      "env": {}
+    }
+  },
+  "tools": [
+    {
+      "name": "pdf_status",
+      "description": "Reports which folders this server may read from and write into, and whether macOS is actually letting it reach them. Reads no file contents."
+    },
+    {
+      "name": "pdf_read",
+      "description": "Extracts text from a PDF with PDFKit, page by page, plus its outline (bookmarks) and document metadata — title, author, subject, keywords, producer and dates. outline_query searches the outline by title instead of returning it whole, which matters once it runs to hundreds of entries."
+    },
+    {
+      "name": "pdf_search",
+      "description": "Finds every occurrence of a string in a PDF and returns each hit's page number plus the full line it appears on. Case- and accent-insensitive by default, so \"resume\" and \"résumé\" match each other."
+    },
+    {
+      "name": "pdf_list_annotations",
+      "description": "Lists every annotation already on a PDF — highlights, notes, shapes, links, form widgets — with its page, type, contents and position."
+    },
+    {
+      "name": "pdf_list_form_fields",
+      "description": "Lists every AcroForm field in a PDF, with its name, kind, current value and whether it is read-only."
+    },
+    {
+      "name": "pdf_merge_pages",
+      "description": "Builds a new PDF by copying pages from one or more sources, in order -- merges, reorders, extracts/splits or deletes pages depending on what is passed. Never modifies a source."
+    },
+    {
+      "name": "pdf_rotate_pages",
+      "description": "Rotates specific pages of a PDF by a multiple of 90 degrees and writes the result to a new file. Never modifies the source."
+    },
+    {
+      "name": "pdf_add_annotation",
+      "description": "Adds a highlight, underline, strike_out, note, free_text or square/circle annotation to a page and writes the result to a new file. Never modifies the source."
+    },
+    {
+      "name": "pdf_remove_annotation",
+      "description": "Removes one annotation (addressed as pdf_list_annotations reports it) and writes the result to a new file. Never modifies the source."
+    },
+    {
+      "name": "pdf_highlight_text",
+      "description": "Finds every occurrence of a string and adds a Highlight annotation over each one, then writes the result to a new file. Never modifies the source."
+    },
+    {
+      "name": "pdf_fill_form",
+      "description": "Sets values on a PDF's AcroForm fields by name and writes the result to a new file. Optionally flattens the form permanently. Never modifies the source."
+    },
+    {
+      "name": "pdf_set_password",
+      "description": "Encrypts a PDF with a user and/or owner password and a permission list, and writes the result to a new file. Never modifies the source."
+    },
+    {
+      "name": "pdf_remove_password",
+      "description": "Unlocks a PDF with a password and writes a plain, unencrypted copy. Never modifies the source."
+    },
+    {
+      "name": "pdf_set_metadata",
+      "description": "Sets title, author, subject and/or keywords on a PDF's metadata and writes the result to a new file. Never modifies the source."
+    },
+    {
+      "name": "pdf_render_page",
+      "description": "Renders one page to a PNG image, exactly as it displays. Never modifies the source."
+    },
+    {
+      "name": "pdf_redact_pages",
+      "description": "Genuinely redacts given rectangles on given pages by rasterizing each affected page whole, then writes the result to a new file. Never modifies the source."
+    }
+  ],
+  "user_config": {
+    "read_roots": {
+      "type": "directory",
+      "title": "Folders Claude may read",
+      "multiple": true,
+      "required": true,
+      "description": "Claude can open any PDF inside these. Nothing outside them is reachable."
+    },
+    "write_roots": {
+      "type": "directory",
+      "title": "Folders Claude may write",
+      "multiple": true,
+      "required": false,
+      "description": "Claude can save new or edited PDFs and images inside these. Being able to read a folder's PDFs does not by itself allow writing into it — leave this blank to keep the server read-only."
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": [
+      "darwin"
+    ]
+  }
+}
