@@ -230,3 +230,7 @@ probes every root and reports what it found.
 **A linker-signed binary gets no TCC prompt at all.** `pack.sh` re-signs and prints the
 designated requirement; an empty line there means the build is broken in a way nothing
 else will show.
+
+## Diagnostics
+
+Logs go to stderr through `Diagnostics`, which the host captures (Claude Desktop writes it to `~/Library/Logs/Claude/mcp-server-<name>.log`). stdout is the JSON-RPC stream: never `print`. The API takes no free-form text on purpose. Do not add one, and do not log an argument, a result, an error's `localizedDescription` or an identifier; log a fixed event, the tool name, the error's kind and a duration.
