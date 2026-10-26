@@ -1,18 +1,18 @@
 <p align="center">
-  <img src="extension/icon.png" width="120" height="120" alt="apple-pdf-mcp">
+  <img src="extension/icon.png" width="128" height="128" alt="apple-pdf-mcp icon">
 </p>
 
-<h1 align="center">apple-pdf-mcp</h1>
+# apple-pdf-mcp
 
-<p align="center">
-  Let Claude work with your PDFs the way you would in Preview — read, search,<br>
-  annotate, fill forms, encrypt and redact.
-</p>
+A local MCP server, written in Swift on Apple's own PDFKit, that lets Claude work with your
+PDFs the way you would in Preview — read, search, annotate, fill forms, encrypt and redact.
+It ships as a Claude extension: install it, choose which folders Claude may touch, done.
 
-<p align="center">
-  A local MCP server for macOS, written in Swift on Apple's own PDFKit.<br>
-  <em>No network. No Finder. No Apple events. Nothing leaves your Mac.</em>
-</p>
+*No network. No Finder. No Apple events. Nothing leaves your Mac.* Everything runs through
+**PDFKit** — the same framework Preview uses: no PDF parsing of its own and no third-party
+library.
+
+Not affiliated with or endorsed by Apple Inc.
 
 <p align="center">
   <a href="https://github.com/eneko-codes/apple-pdf-mcp/actions/workflows/ci.yml"><img src="https://github.com/eneko-codes/apple-pdf-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -20,8 +20,6 @@
   <img src="https://img.shields.io/badge/Swift-6.0-orange" alt="Swift 6.0">
   <img src="https://img.shields.io/badge/licence-MIT-blue" alt="MIT licence">
 </p>
-
----
 
 ## See it work
 
@@ -42,24 +40,13 @@
 
 <img src="docs/images/demo-form.jpg" width="420" alt="A sample application form with every field filled in">
 
----
+## Requirements
 
-## What this is
-
-An MCP server giving Claude **16 tools** for working with PDFs on your Mac. It ships as a
-Claude extension: install it, choose which folders Claude may touch, done.
-
-Everything runs through **PDFKit** — the same framework Preview uses. No PDF parsing of its
-own, no third-party library, no network access of any kind.
-
-Two properties shape how it behaves:
-
-- **It never edits your file.** Every tool that changes something writes a **new** file at a
-  path you choose. Your original is untouched, always.
-- **You decide what it can reach.** Two independent folder lists — one to read, one to write
-  into. Being able to read a folder does not mean it can write there.
-
----
+- An Apple silicon Mac on macOS 26 or later
+- Xcode 26 (Swift 6.0 or later)
+- A code-signing identity. Ad-hoc signing works too, but then macOS re-asks for folder
+  permission on every rebuild. See what you have with
+  `security find-identity -v -p codesigning`.
 
 ## Tools
 
@@ -99,9 +86,22 @@ Each writes a new file and leaves the source alone.
 > the result has no title, author or keywords at all. Extract three sections to send to
 > someone and the file arrives anonymous unless you run `pdf_set_metadata` afterwards.
 
----
+## Frameworks and APIs
 
-## Four things worth knowing
+| Used | For | Reference |
+|---|---|---|
+| PDFKit — `PDFDocument`, `PDFPage`, `PDFAnnotation`, `PDFSelection`, `PDFOutline`, `PDFDestination` | Every read and write, including `PDFDocumentWriteOption` and `PDFAccessPermissions` for passwords and permissions | [PDFKit](https://developer.apple.com/documentation/pdfkit) |
+| Core Graphics — `CGContext`, `CGColorSpace` | Rasterising a page for `pdf_render_page` and `pdf_redact_pages` | [Core Graphics](https://developer.apple.com/documentation/coregraphics) |
+| AppKit — `NSImage`, `NSBitmapImageRep`, `NSColor` | Turning a rendered page into PNG | [AppKit](https://developer.apple.com/documentation/appkit) |
+| Foundation `FileManager` | Path scope checks and writing output | [FileManager](https://developer.apple.com/documentation/foundation/filemanager) |
+
+PDFKit offers more: the whole `PDFAction` family (link targets, form resets, remote go-to),
+`PDFBorder` and `PDFAppearanceCharacteristics`, and the view layer — `PDFView`,
+`PDFThumbnailView`, `PDFPageOverlayViewProvider` — which a stdio server has no use for. There
+is no public PDFKit API for a CMS/PKCS7 signature, which is why no signing tool exists here.
+Vision is not linked: this server never reads pixels as text.
+
+## The rules worth knowing before you use it
 
 **Your originals are never modified.** Every change goes to a new file at the `output_path`
 you name. Nothing is edited in place, ever.
@@ -120,20 +120,9 @@ those words in the file, where anything ignoring draw order pulls them straight 
 exist — and so does the rest of that page's searchable text. **Redact last**, once you have
 finished searching and highlighting.
 
----
-
 ## Install
 
-**There is no download.** You build it yourself, and that is on purpose — macOS ties a
-folder permission to the signature on the binary, so a build signed by someone else would
-hand you a grant you cannot renew, and an unsigned one would re-ask on every update. Signing
-locally with your own identity is what makes the permission stick.
-
-Needs an Apple silicon Mac on macOS 26+, Xcode 26, and a code-signing identity. Ad-hoc
-signing works too, but then macOS re-asks for folder permission on every rebuild. See what
-you have with `security find-identity -v -p codesigning`.
-
-### 1. Build it
+### 1. Build the bundle
 
 ```bash
 MCPB_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./scripts/pack.sh
@@ -172,16 +161,47 @@ embedded `Info.plist`:
 otool -P extension/server/apple-pdf-mcp | grep UsageDescription
 ```
 
----
+### Signing, and why it is not optional
 
-## Turning tools on and off
+**There is no download.** You build it yourself, and that is on purpose — macOS ties a
+folder permission to the signature on the binary, so a build signed by someone else would
+hand you a grant you cannot renew, and an unsigned one would re-ask on every update. Signing
+locally with your own identity is what makes the permission stick.
+
+### Preparing something to distribute
+
+```bash
+MCPB_HARDENED=1 MCPB_SIGN_IDENTITY="Developer ID Application: …" ./scripts/pack.sh
+```
+
+Adds the hardened runtime and a secure timestamp, which notarisation requires. This server
+sends no Apple events and needs no entitlements file.
+
+## Tool switches
 
 Every tool has its own switch in **Settings → Extensions → PDF**. Turn off anything you would
 rather Claude could not do — switch off all the writing tools and it becomes a reader.
 
 **Reinstalling can reset these switches**, so check them after each update.
 
----
+## Manual registration instead
+
+```json
+{
+  "mcpServers": {
+    "PDF": {
+      "command": "/absolute/path/to/apple-pdf-mcp/.build/release/apple-pdf-mcp",
+      "args": [
+        "--read-roots", "/Users/you/Documents",
+        "--write-roots", "/Users/you/Documents/PDF Output"
+      ]
+    }
+  }
+}
+```
+
+You lose the per-tool switches, and both scopes must be passed by hand. Omit `--write-roots`
+to keep it read-only.
 
 ## Known limits
 
@@ -200,25 +220,6 @@ rather Claude could not do — switch off all the writing tools and it becomes a
 - **Placing annotations by coordinate is only as good as your coordinates.** For text you can
   name, `pdf_highlight_text` finds it exactly. Save `pdf_add_annotation` for shapes and notes.
 
----
-
-## Frameworks and APIs
-
-| Used | For | Reference |
-|---|---|---|
-| PDFKit — `PDFDocument`, `PDFPage`, `PDFAnnotation`, `PDFSelection`, `PDFOutline`, `PDFDestination` | Every read and write, including `PDFDocumentWriteOption` and `PDFAccessPermissions` for passwords and permissions | [PDFKit](https://developer.apple.com/documentation/pdfkit) |
-| Core Graphics — `CGContext`, `CGColorSpace` | Rasterising a page for `pdf_render_page` and `pdf_redact_pages` | [Core Graphics](https://developer.apple.com/documentation/coregraphics) |
-| AppKit — `NSImage`, `NSBitmapImageRep`, `NSColor` | Turning a rendered page into PNG | [AppKit](https://developer.apple.com/documentation/appkit) |
-| Foundation `FileManager` | Path scope checks and writing output | [FileManager](https://developer.apple.com/documentation/foundation/filemanager) |
-
-PDFKit offers more: the whole `PDFAction` family (link targets, form resets, remote go-to),
-`PDFBorder` and `PDFAppearanceCharacteristics`, and the view layer — `PDFView`,
-`PDFThumbnailView`, `PDFPageOverlayViewProvider` — which a stdio server has no use for. There
-is no public PDFKit API for a CMS/PKCS7 signature, which is why no signing tool exists here.
-Vision is not linked: this server never reads pixels as text.
-
----
-
 ## Development
 
 ```bash
@@ -226,8 +227,8 @@ swift build
 swift test
 ```
 
-61 tests across four suites — `PathScopeTests`, `CatalogueTests`, `DispatchTests` and
-`FormatTests` — all against a modelled scope and a recording double, **never a real file**.
+The tests (`PathScopeTests`, `CatalogueTests`, `DispatchTests` and
+`FormatTests`) run entirely against a modelled scope and a recording double, **never a real file**.
 `StubStore` throws from every method except `canonicalise`, so a scope test that accidentally
 reached a real file fails loudly instead of quietly passing. That is also why the suite runs
 unchanged in CI on a fresh `macos-26` runner: it needs no documents, no folder permissions and
@@ -251,36 +252,6 @@ test while landing somewhere else entirely. Containment is checked by path compo
 `Documents-private` is never mistaken for something inside `Documents`.
 
 `CLAUDE.md` carries the rules for anyone — human or agent — working in this repository.
-
-### Running it without the extension
-
-```json
-{
-  "mcpServers": {
-    "PDF": {
-      "command": "/absolute/path/to/apple-pdf-mcp/.build/release/apple-pdf-mcp",
-      "args": [
-        "--read-roots", "/Users/you/Documents",
-        "--write-roots", "/Users/you/Documents/PDF Output"
-      ]
-    }
-  }
-}
-```
-
-You lose the per-tool switches, and both scopes must be passed by hand. Omit `--write-roots`
-to keep it read-only.
-
-### Distributing a build
-
-```bash
-MCPB_HARDENED=1 MCPB_SIGN_IDENTITY="Developer ID Application: …" ./scripts/pack.sh
-```
-
-Adds the hardened runtime and a secure timestamp, which notarisation requires. This server
-sends no Apple events and needs no entitlements file.
-
----
 
 ## Licence
 
