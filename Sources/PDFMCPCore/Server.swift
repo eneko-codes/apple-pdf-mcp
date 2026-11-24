@@ -1,10 +1,9 @@
 import Foundation
-import MCP
 
 public enum PDFMCPServer {
 
     public static let name = "apple-pdf-mcp"
-    public static let version = "1.0.0"
+    public static let version = "1.0.1"
 
     /// Returned from `initialize`. It carries what per-tool descriptions cannot state
     /// once: the allow-list(s), which tool answers which kind of question, and the fact
@@ -106,23 +105,15 @@ public enum PDFMCPServer {
     public static func run(
         store: any PDFStore = SystemPDFStore(),
         configuration: Configuration = Configuration()
-    ) async throws {
-        let tools = PDFTools(store: store, configuration: configuration)
-        let server = Server(
-            name: name,
-            version: version,
-            instructions: instructions,
-            capabilities: .init(tools: .init(listChanged: false))
-        )
-
-        await server.withMethodHandler(ListTools.self) { _ in .init(tools: ToolCatalog.all()) }
-        await server.withMethodHandler(CallTool.self) { await tools.handle($0) }
-
-        // The default StdioTransport logger is a no-op handler. Leave it that way: a
-        // logger writing to stdout would interleave with the JSON-RPC stream and break
-        // every response after the first log line.
+    ) async {
         Diagnostics.started(version: version)
-        try await server.start(transport: StdioTransport())
-        await server.waitUntilCompleted()
+        await serveStandardStreams(
+            handler: handler(tools: PDFTools(store: store, configuration: configuration)))
+    }
+
+    public static func handler(tools: PDFTools) -> MCPHandler {
+        MCPHandler(
+            name: name, version: version, instructions: instructions,
+            catalog: ToolCatalog.all(), tools: tools)
     }
 }

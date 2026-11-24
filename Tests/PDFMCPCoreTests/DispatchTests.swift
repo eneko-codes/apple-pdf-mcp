@@ -1,5 +1,4 @@
 import Foundation
-import MCP
 import Testing
 
 @testable import PDFMCPCore
@@ -176,7 +175,7 @@ struct DispatchTests {
         return PDFTools(store: store, configuration: configuration)
     }
 
-    private func call(_ name: String, _ arguments: [String: Value]) -> CallTool.Parameters {
+    private func call(_ name: String, _ arguments: [String: Value]) -> ToolCall {
         .init(name: name, arguments: arguments)
     }
 
@@ -191,7 +190,7 @@ struct DispatchTests {
         let store = RecordingStore()
         let result = await tools(store).handle(call(ToolCatalog.statusName, [:]))
         #expect(result.isError == false)
-        guard case .text(let text, _, _) = result.content.first else {
+        guard case .text(let text) = result.content.first else {
             Issue.record("expected text content")
             return
         }
@@ -206,7 +205,7 @@ struct DispatchTests {
         let empty = PDFTools(store: store, configuration: Configuration())
         let result = await empty.handle(call(ToolCatalog.statusName, [:]))
         #expect(result.isError == false)
-        guard case .text(let text, _, _) = result.content.first else {
+        guard case .text(let text) = result.content.first else {
             Issue.record("expected text content")
             return
         }
@@ -288,7 +287,7 @@ struct DispatchTests {
         let result = await tools(store).handle(
             call(ToolCatalog.listAnnotationsName, ["path": .string("/x.pdf")]))
         #expect(result.isError == false)
-        guard case .text(let text, _, _) = result.content.first else {
+        guard case .text(let text) = result.content.first else {
             Issue.record("expected text content")
             return
         }
@@ -302,7 +301,7 @@ struct DispatchTests {
         let result = await tools(store).handle(
             call(ToolCatalog.listFormFieldsName, ["path": .string("/x.pdf")]))
         #expect(result.isError == false)
-        guard case .text(let text, _, _) = result.content.first else {
+        guard case .text(let text) = result.content.first else {
             Issue.record("expected text content")
             return
         }
