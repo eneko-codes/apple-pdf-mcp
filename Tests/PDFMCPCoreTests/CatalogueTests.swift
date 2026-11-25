@@ -1,5 +1,4 @@
 import Foundation
-import MCP
 import Testing
 
 @testable import PDFMCPCore
@@ -110,7 +109,7 @@ struct CatalogueTests {
             // merits ("missing required argument 'path'"), while an unrouted one cannot
             // get that far. Only the second failure is the one under test.
             let result = await tools.handle(.init(name: tool.name, arguments: [:]))
-            guard case .text(let message, _, _)? = result.content.first else {
+            guard case .text(let message)? = result.content.first else {
                 Issue.record("\(tool.name) returned no text at all")
                 continue
             }
@@ -154,5 +153,16 @@ struct CatalogueTests {
             let description = entry["description"] as? String ?? ""
             #expect(!description.isEmpty, "\(name) has no description in manifest.json")
         }
+    }
+
+    /// The server is built from the system's own frameworks and nothing else. A dependency
+    /// is a decision for the owner, so adding one has to break this test first.
+    @Test("The package declares no third-party dependency")
+    func noDependencies() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let package = try String(contentsOf: root.appendingPathComponent("Package.swift"), encoding: .utf8)
+        #expect(!package.contains(".package("), "Package.swift declares a dependency")
+        #expect(!package.contains(".product("))
     }
 }
