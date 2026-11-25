@@ -58,10 +58,30 @@ Arguments in `code` are required, `?` marks optional. Every writing tool also ta
 | Tool | What it does | Arguments | Metadata |
 |---|---|---|---|
 | **`pdf_status`** | Shows which folders it may read and write, and whether macOS is actually allowing it. Start here when something is refused. | — | — |
-| **`pdf_read`** | Pulls out the text page by page, plus bookmarks and document info. Says plainly when a PDF is a scan instead of returning blank pages. | `path`, `first_page?`, `last_page?`, `outline_query?`, `include_outline?`, `password?` | Reported; long values trimmed at 400 characters |
-| **`pdf_search`** | Finds every occurrence of a phrase, with the whole line it sits on. Ignores case and accents, and still matches when the document breaks the phrase across two lines. | `path`, `query`, `case_sensitive?`, `accent_sensitive?`, `password?` | Not touched |
-| **`pdf_list_annotations`** | Lists highlights, notes, shapes and links already on a PDF, with position and author. | `path`, `password?` | Not touched |
-| **`pdf_list_form_fields`** | Lists a form's fields — name, type, current value, whether it is locked. Call this before filling anything. | `path`, `password?` | Not touched |
+| **`pdf_read`** | Pulls out the text page by page, plus bookmarks and document info. Says plainly when a PDF is a scan instead of returning blank pages. | `path`, `first_page?`, `last_page?`, `character_offset?`, `max_characters?`, `outline_query?`, `include_outline?`, `limit?`, `offset?`, `password?` | Reported; long values trimmed at 400 characters |
+| **`pdf_search`** | Finds occurrences of a phrase, in document order, each with the line it sits on. Ignores case and accents, and still matches when the document breaks the phrase across two lines. | `path`, `query`, `case_sensitive?`, `accent_sensitive?`, `limit?`, `offset?`, `password?` | Not touched |
+| **`pdf_list_annotations`** | Lists highlights, notes, shapes and links already on a PDF, by page and index, with position and author. | `path`, `limit?`, `offset?`, `password?` | Not touched |
+| **`pdf_list_form_fields`** | Lists a form's fields — name, type, current value, whether it is locked — by page and index. Call this before filling anything. | `path`, `limit?`, `offset?`, `password?` | Not touched |
+
+### How much a call returns
+
+A call with no optional argument returns about one page of what exists, and its first lines
+say how much there is and which argument returns the rest. Nothing is cut silently.
+
+| Tool | Page of rows (`limit`) | Long fields |
+|---|---|---|
+| `pdf_search` | 1–200, default 50, in document order | the line, cut at 160 characters |
+| `pdf_list_annotations` | 1–100, default 25, by page then index | contents cut at 150 characters, author at 40 |
+| `pdf_list_form_fields` | 1–100, default 25, by page then index | name cut at 80 characters, value at 120 |
+| `pdf_read` outline | 1–100, default 25, in document order | title cut at 120 characters |
+| `pdf_read` text | `max_characters` 1–16000, default 10000, read on with `character_offset` | metadata values cut at 400 characters |
+
+`offset` skips rows. `first_page` and `last_page` (1–100000) choose which pages `pdf_read`
+reads; a page number or an annotation index outside its range is refused, while a size,
+count or skip outside its range is moved to the nearest allowed value and the result says
+which was used. An argument a tool does not list is refused, naming the ones it accepts.
+A value cut to its width cannot be read in full through this server. A call that runs
+longer than 60 seconds is abandoned; for a tool that writes, the file may still appear.
 
 ### Writing
 
@@ -231,8 +251,8 @@ swift build
 swift test
 ```
 
-The tests (`PathScopeTests`, `CatalogueTests`, `DispatchTests` and
-`FormatTests`) run entirely against a modelled scope and a recording double, **never a real file**.
+The tests (`PathScopeTests`, `CatalogueTests`, `DispatchTests`, `FormatTests`, `BoundsTests`,
+`ToolStandardTests` and `MCPProtocolTests`) run entirely against a modelled scope and a recording double, **never a real file**.
 `StubStore` throws from every method except `canonicalise`, so a scope test that accidentally
 reached a real file fails loudly instead of quietly passing. That is also why the suite runs
 unchanged in CI on a fresh `macos-26` runner: it needs no documents, no folder permissions and

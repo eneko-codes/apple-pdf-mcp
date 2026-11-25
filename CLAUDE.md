@@ -88,10 +88,11 @@ events, no network, **no third-party dependency**: `Package.swift` lists none, a
 protocol (JSON-RPC over stdio) is `MCPServer.swift` over Foundation. Adding a package needs
 the owner's say-so.
 
-**`MCPServer.swift`, `Value.swift` and `Tests/…/MCPProtocolTests.swift` are copied unchanged
-into every one of the owner's MCP servers** (the test file differs only in its `@testable
-import`). A change to one is made to every copy in the same piece of work; never let a copy
-drift.
+**`MCPServer.swift`, `Value.swift`, `ToolStandard.swift` and the tests `MCPProtocolTests.swift` and `ToolStandardTests.swift` are copied unchanged into every one of the owner's MCP servers** (the test files differ only in their `@testable import`). A change to one is made to every copy in the same piece of work; never let a copy drift.
+
+`ToolStandard.swift` holds what every tool here must keep to: the longest result, description and error, the time a call may take, the fixed wording of each notice that says what a result left out (`Notice`), and the guard `MCPServer.swift` passes every result through. A tool bounds its own result and says how to get the rest; the guard only catches the one that forgot.
+
+**How a tool keeps to the tool standard here.** Sizes are constants in `ToolCatalog`, and the schemas, the descriptions and the instructions quote them by interpolation, never as literals. `Arguments.int` moves a quantity (`limit`, `offset`, `character_offset`, `max_characters`) into its range and collects the sentence that says so in `notices`; `optionalIdentifier` refuses a page number or an annotation index outside its range, because the nearest one would name another page. `Arguments.requireOnly` refuses an argument the tool's schema does not list (the schema is the one list), also inside `sources`, `rotations` and `regions`. A listing keeps the store's order, which it states, and goes through `Format.page`, which puts the notices, the position of the page (`Notice.page`) and what was clipped before the rows. `pdf_read` windows its text with `ToolStandard.window`, pages its outline, and renders through `ToolStandard.fitting`. A field clipped to a width has no tool that reads it in full, so `Format.Clipper` announces it with the standard's sentence for text whose rest cannot be read again. Every call runs under `Deadline` (`ToolCatalog.callTimeout`). `BoundsTests` holds every bound, notice and length to this: a new listing takes `limit` and `offset` through `Arguments.page` and gets an entry in its `listings`.
 
 **Policy history, because it contradicts what git blame will show:** this server was
 originally built read-only by deliberate design — see the note below — and its own

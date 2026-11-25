@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "apple-pdf-mcp",
   "display_name": "PDF",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Full PDFKit read/write access — text, search, page assembly, annotations, forms, encryption, metadata, rendering and redaction",
-  "long_description": "A local MCP server written in Swift for full PDF interaction through PDFKit — not just extracting text. Reading: text page by page, the bookmark outline, document metadata, full-text search, listing existing annotations and form fields. Writing: page assembly (merge, reorder, extract, split, delete, rotate), adding/removing/searching-and-highlighting annotations, filling AcroForm fields (with optional flattening), encryption and permissions, metadata editing, page rendering to PNG, and redaction.\n\nEvery tool that changes a PDF writes its result to a new path and never touches the file(s) it read.\n\npdf_redact_pages is worth understanding before use: it does not merely paint over the given rectangles, which would leave the original text extractable underneath. It rasterizes each affected page whole after painting, replacing it with a plain image — a redacted page loses its entire text layer, not just the redacted area. That is the only way public PDFKit makes redaction genuinely irreversible; there is no middle option.\n\nTwo things public PDFKit cannot do, so this server does not pretend to: a real cryptographic signature (no public API attaches one), and redaction without the whole-page rasterization trade-off above.\n\nA PDF with no text layer at all is a scan. This server says so explicitly instead of returning empty pages rather than guessing; reading the pixels is text recognition, which this server does not do.\n\nThe two folder lists below are the ONE deliberate exception to \"nothing to configure\": together they are the security boundary itself, not a preference, so there is no sensible default to hardcode in their place. Leaving either blank means nothing is reachable through it; guessing one would mean guessing what may be exposed. Being allowed to read a folder's PDFs does not by itself allow writing into it — the lists are independent.\n\nA password-protected PDF is refused by every read tool unless the correct password is given as that tool's own argument; the write tools do not accept a password for their input yet.\n\nNot affiliated with or endorsed by Apple Inc.",
+  "long_description": "A local MCP server written in Swift for full PDF interaction through PDFKit — not just extracting text. Reading: text page by page in windows, the bookmark outline, document metadata, full-text search, listing existing annotations and form fields. Every read returns one page of what exists and says how to reach the rest. Writing: page assembly (merge, reorder, extract, split, delete, rotate), adding/removing/searching-and-highlighting annotations, filling AcroForm fields (with optional flattening), encryption and permissions, metadata editing, page rendering to PNG, and redaction.\n\nEvery tool that changes a PDF writes its result to a new path and never touches the file(s) it read.\n\npdf_redact_pages is worth understanding before use: it does not merely paint over the given rectangles, which would leave the original text extractable underneath. It rasterizes each affected page whole after painting, replacing it with a plain image — a redacted page loses its entire text layer, not just the redacted area. That is the only way public PDFKit makes redaction genuinely irreversible; there is no middle option.\n\nTwo things public PDFKit cannot do, so this server does not pretend to: a real cryptographic signature (no public API attaches one), and redaction without the whole-page rasterization trade-off above.\n\nA PDF with no text layer at all is a scan. This server says so explicitly instead of returning empty pages rather than guessing; reading the pixels is text recognition, which this server does not do.\n\nThe two folder lists below are the ONE deliberate exception to \"nothing to configure\": together they are the security boundary itself, not a preference, so there is no sensible default to hardcode in their place. Leaving either blank means nothing is reachable through it; guessing one would mean guessing what may be exposed. Being allowed to read a folder's PDFs does not by itself allow writing into it — the lists are independent.\n\nA password-protected PDF is refused by every read tool unless the correct password is given as that tool's own argument; the write tools do not accept a password for their input yet.\n\nNot affiliated with or endorsed by Apple Inc.",
   "author": {
     "name": "eneko-codes",
     "url": "https://github.com/eneko-codes"
@@ -43,19 +43,19 @@
     },
     {
       "name": "pdf_read",
-      "description": "Extracts text from a PDF with PDFKit, page by page, plus its outline (bookmarks) and document metadata — title, author, subject, keywords, producer and dates. outline_query searches the outline by title instead of returning it whole, which matters once it runs to hundreds of entries."
+      "description": "Extracts text from a PDF with PDFKit, page by page, plus its outline (bookmarks) and document metadata. Returns a window of text and a page of the outline: first_page, last_page, character_offset and max_characters read through the text; limit and offset page the outline; outline_query searches it by title."
     },
     {
       "name": "pdf_search",
-      "description": "Finds every occurrence of a string in a PDF and returns each hit's page number plus the full line it appears on. Case- and accent-insensitive by default, so \"resume\" and \"résumé\" match each other."
+      "description": "Finds occurrences of a string in a PDF, in document order, each with its page number and the line it appears on; limit and offset page through them. Case- and accent-insensitive by default, so \"resume\" and \"résumé\" match each other."
     },
     {
       "name": "pdf_list_annotations",
-      "description": "Lists every annotation already on a PDF — highlights, notes, shapes, links, form widgets — with its page, type, contents and position."
+      "description": "Lists the annotations already on a PDF — highlights, notes, shapes, links, form widgets — by page and index, with type, contents and position; limit and offset page through them."
     },
     {
       "name": "pdf_list_form_fields",
-      "description": "Lists every AcroForm field in a PDF, with its name, kind, current value and whether it is read-only."
+      "description": "Lists the AcroForm fields of a PDF by page and index, with name, kind, current value and whether it is read-only; limit and offset page through them."
     },
     {
       "name": "pdf_merge_pages",
