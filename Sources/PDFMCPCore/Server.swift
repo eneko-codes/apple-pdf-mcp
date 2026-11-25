@@ -3,101 +3,67 @@ import Foundation
 public enum PDFMCPServer {
 
     public static let name = "apple-pdf-mcp"
-    public static let version = "1.0.1"
+    public static let version = "1.1.0"
 
-    /// Returned from `initialize`. It carries what per-tool descriptions cannot state
-    /// once: the allow-list(s), which tool answers which kind of question, and the fact
-    /// that a scan needs a different tool entirely.
+    /// Returned from `initialize`. It leads with what a call returns and how to reach the
+    /// rest, because a client may show only its start; the rules that cannot be put on one
+    /// tool follow. Sizes come from `ToolCatalog`, never from literals.
     public static let instructions = """
-        Reads PDFs on this Mac through PDFKit. No Finder, no Apple events, no network.
+        Reads and edits PDFs on this Mac through PDFKit. No network, no text recognition.
 
-        TWO INDEPENDENT SCOPES: a list of folders that may be READ and a separate, \
-        narrower list of folders that may be WRITTEN into, each chosen by the person who \
-        installed the extension. Being allowed to read a folder's PDFs does not by itself \
-        allow writing into it. Every path is canonicalised — ~ expanded, .. removed, \
-        symlinks followed — and then checked against the matching list before anything \
-        happens. A path outside its list is refused and the error names the configured \
-        scope. Call pdf_status first: it reports both lists and whether macOS is actually \
-        letting this process reach them.
+        HOW RESULTS ARE BOUNDED. Every listing returns one page and says, in its first \
+        lines, how many exist and the exact argument that returns the next page: limit and \
+        offset. pdf_read returns a window of text: first_page and last_page choose pages, \
+        character_offset and max_characters read through them. A number outside its range \
+        is moved and reported; a page number or index outside its range is refused. An \
+        argument a tool does not list is refused.
 
-        pdf_read extracts a PDF's text, page by page, plus its outline (bookmarks) and \
-        document metadata — title, author, subject, keywords, producer and dates. A PDF \
-        with no text layer at all is a scan: pdf_read says so explicitly instead of \
-        returning empty pages. Reading the pixels is text recognition, which this server \
-        does not do.
+        pdf_read: the metadata, up to \(ToolCatalog.defaultOutlineLimit) outline entries \
+        and a window of \(ToolCatalog.defaultMaxCharacters) characters from the start of the \
+        text of all pages (with outline_query and no page range, page 1 only). A scan \
+        (no text layer) is reported, not returned as empty pages. outline_query keeps the \
+        outline entries whose title contains a text: the way to find a page number in a \
+        long document. Metadata values are cut at \(ToolCatalog.metadataValueWidth) \
+        characters and outline titles at \(ToolCatalog.outlineTitleWidth), and the rest of \
+        a cut value cannot be read here.
 
-        The outline is returned in full regardless of the page range asked for, so a long \
-        compendium's outline can itself be too large a response to be useful. Pass \
-        outline_query to search it by title instead of reading it whole — the way to find \
-        one entry's page number without the response becoming enormous.
+        pdf_search: occurrences in document order, \(ToolCatalog.defaultSearchLimit) by \
+        default, each with its page and its line. Case- and accent-insensitive by default \
+        ("resume" finds "résumé"); accent_sensitive tells them apart. pdf_list_annotations \
+        and pdf_list_form_fields: \(ToolCatalog.defaultAnnotationLimit) rows by default, \
+        by page and index; call pdf_list_form_fields before pdf_fill_form.
 
-        pdf_search finds every occurrence of a string and returns the whole line each hit \
-        sits on, not just the bare word. It is case- AND accent-insensitive by default, \
-        because one document often spells a term two ways — "resume" in one place and \
-        "résumé" in another — and an accent-exact search finds one set or the other while \
-        reporting a count that looks complete. Pass accent_sensitive to tell them apart. \
-        A phrase the document wraps across a line break is still matched. \
-        pdf_list_annotations reports every highlight, \
-        note, shape and link already on a PDF; pdf_list_form_fields reports every AcroForm \
-        field, its current value and whether it is read-only — call this before trying to \
-        fill a form.
+        SCOPES. Two independent lists of folders, chosen by whoever installed the \
+        extension: one may be READ, a narrower one WRITTEN. Paths are canonicalised (~ \
+        expanded, .. removed, symlinks followed) and then checked; a path outside its list \
+        is refused. Call pdf_status first: it reports both lists and whether macOS lets \
+        this process reach them.
 
-        A password-protected PDF is refused by every read tool above unless the correct \
-        password is given as that tool's own `password` argument.
+        WRITING. Every tool that changes a PDF takes output_path, writes a NEW file there \
+        and never touches its source. pdf_merge_pages builds a PDF from pages of one or \
+        more sources (merge, reorder, extract, split, delete) and drops the metadata. \
+        pdf_rotate_pages turns pages by multiples of 90 degrees. pdf_add_annotation adds a \
+        highlight, underline, strike_out, note, free_text, square or circle; \
+        pdf_highlight_text highlights every occurrence of a text, following line breaks. \
+        pdf_remove_annotation takes (page, index) as pdf_list_annotations shows them; a \
+        sticky note is two entries and both go. pdf_fill_form sets fields by name \
+        (flatten=true is irreversible; signature fields are skipped). pdf_set_metadata \
+        changes title, author, subject, keywords. pdf_render_page writes one page as a PNG.
 
-        pdf_merge_pages and pdf_rotate_pages write: both require `output_path`, checked \
-        against the WRITE scope, and never touch the file(s) they read. pdf_merge_pages \
-        builds a new PDF from one or more sources' pages, in the order given — the one \
-        primitive behind merging several files, reordering one file's pages, \
-        extracting/splitting a subset, and deleting pages by omitting them. \
-        pdf_rotate_pages rotates specific pages by a multiple of 90 degrees.
+        PASSWORDS. pdf_read, pdf_search and the two listings take the document's password \
+        as `password`, and pdf_remove_password needs it; the other writing tools take none and \
+        refuse a protected source. \
+        pdf_set_password encrypts (omit permissions to allow everything, [] to deny all); \
+        pdf_remove_password writes an unlocked copy.
 
-        pdf_add_annotation adds a highlight, underline, strike_out, note (sticky note), \
-        free_text (text box) or square/circle (optionally filled) to a page — freehand \
-        ink, line and stamp annotations are not offered, since none has a natural shape \
-        for a tool argument. pdf_remove_annotation removes one, addressed exactly as \
-        pdf_list_annotations reports it: (page, index) — note that a sticky note is TWO \
-        entries, the Text annotation and a paired Popup holding the same contents, and \
-        removing the Text one removes both. pdf_highlight_text is the easier path for the \
-        common case — search for text and highlight every occurrence, following the actual \
-        line breaks rather than one rectangle per match.
+        REDACTION. pdf_redact_pages paints the rectangles and then rasterizes each page \
+        listed, whole: that page loses its entire text layer, so pdf_search and pdf_read \
+        find nothing on it afterward. Redact last. Painting a box alone is not redaction.
 
-        pdf_fill_form sets values on AcroForm fields by name — the same string-value \
-        assignment for text fields, checkboxes/radio buttons and choice fields alike, so \
-        call pdf_list_form_fields first to see each field's kind and its on-state value \
-        for a checkbox/radio button. Every name in `fields` must exist or the call is \
-        refused, naming which one didn't. Signature fields are skipped even if named: no \
-        public API fills one meaningfully. `flatten` burns the values in permanently and \
-        removes the editable widgets — irreversible.
+        No tool signs a PDF: public PDFKit has no API for a cryptographic signature.
 
-        None of the seven tools above accepts a password yet, so a protected source is \
-        refused by all of them.
-
-        pdf_set_password encrypts a PDF: give user_password (needed to open it), \
-        owner_password (needed to change permissions or remove protection — defaults to \
-        user_password if not given separately), or both. permissions lists what stays \
-        allowed once opened; omit it to allow everything, pass [] to deny everything \
-        listed. pdf_remove_password unlocks with a password and writes a plain copy; \
-        wrong password is refused. pdf_set_metadata changes title/author/subject/keywords \
-        — every field optional and independent, omitted fields keep their existing value, \
-        creator/producer/dates stay PDFKit's own.
-
-        pdf_render_page renders one page to a PNG — a snapshot exactly as it displays, \
-        annotations included. pdf_redact_pages is the one tool worth reading twice before \
-        using: it does NOT merely paint over the given rectangles. Painting an opaque box \
-        while leaving the page's underlying content stream intact is not redaction — the \
-        original text is still there underneath, extractable by anything that ignores \
-        what's drawn on top. Instead, every page listed in `regions` is rasterized whole \
-        after the boxes are painted, replacing it with a plain image. The trade-off, \
-        stated plainly: a redacted page loses its ENTIRE text layer, not just the boxed \
-        rectangles — pdf_search and pdf_read will find nothing on that page afterward. \
-        Pages not listed keep their text layer untouched. That trade-off is the price of \
-        the redaction actually being real; there is no middle option in public PDFKit.
-
-        That is the full tool set. Two things public PDFKit itself cannot do, so no tool \
-        here pretends to: a real cryptographic signature (no public API attaches one — \
-        pdf_fill_form skips a signature field rather than faking it), and true redaction \
-        without the whole-page rasterization trade-off above.
+        A call that runs longer than \(Int(ToolCatalog.callTimeout.components.seconds)) \
+        seconds is abandoned; for a tool that writes, the change may still have been made.
         """
 
     /// The store is a parameter so the whole server can be driven by a double. Nothing in

@@ -34,7 +34,7 @@ public struct SystemPDFStore: PDFStore {
         guard expanded.hasPrefix("/") else {
             throw ToolError.badArgument(
                 name: "path",
-                reason: "'\(path)' is not absolute. Give a full path, or one starting with ~")
+                reason: "'\(ToolStandard.echo(path))' is not absolute. Give a full path, or one starting with ~")
         }
 
         let standardised = URL(fileURLWithPath: expanded).standardizedFileURL
@@ -91,11 +91,13 @@ public struct SystemPDFStore: PDFStore {
                 isEncrypted: true)
         }
 
-        let range = (pages ?? PageRange(first: 1, last: document.pageCount))
-            .clamped(to: max(document.pageCount, 1))
+        // An end past the document is moved to its last page, and a start past it yields no
+        // pages: the caller above compares the range with `pageCount` and says so.
+        let range = pages ?? PageRange(first: 1, last: document.pageCount)
+        let last = Swift.min(range.last, document.pageCount)
         var extracted: [PDFContent.Page] = []
-        if document.pageCount > 0 {
-            for number in range.first...range.last {
+        if document.pageCount > 0, range.first <= last {
+            for number in range.first...last {
                 guard let page = document.page(at: number - 1) else { continue }
                 extracted.append(PDFContent.Page(number: number, text: page.string ?? ""))
             }
@@ -179,7 +181,7 @@ public struct SystemPDFStore: PDFStore {
                     throw ToolError.badArgument(
                         name: "sources",
                         reason:
-                            "page \(number) does not exist in \(source.path.path) "
+                            "page \(number) does not exist in \(ToolStandard.echo(source.path.path)) "
                             + "(\(document.pageCount) page(s))")
                 }
                 result.insert(page, at: result.pageCount)
@@ -200,7 +202,7 @@ public struct SystemPDFStore: PDFStore {
                 throw ToolError.badArgument(
                     name: "rotations",
                     reason:
-                        "page \(rotation.page) does not exist in \(path.path) "
+                        "page \(rotation.page) does not exist in \(ToolStandard.echo(path.path)) "
                         + "(\(document.pageCount) page(s))")
             }
             // PDFPage.rotation's setter raises an Objective-C exception for anything that
@@ -357,9 +359,14 @@ public struct SystemPDFStore: PDFStore {
             }
         }
         guard unmatched.isEmpty else {
-            let names = unmatched.sorted().map { "'\($0)'" }.joined(separator: ", ")
+            let missing = unmatched.sorted()
+            let names = missing.prefix(ToolError.listedCandidates)
+                .map { "'\(ToolStandard.echo($0))'" }.joined(separator: ", ")
+            let more =
+                missing.count > ToolError.listedCandidates
+                ? " and \(missing.count - ToolError.listedCandidates) more" : ""
             throw ToolError.badArgument(
-                name: "fields", reason: "no field named \(names) exists in this document")
+                name: "fields", reason: "no field named \(names)\(more) exists in this document")
         }
 
         if flatten {
@@ -368,7 +375,7 @@ public struct SystemPDFStore: PDFStore {
                     to: URL(fileURLWithPath: output.path),
                     withOptions: [.burnInAnnotationsOption: true])
             else {
-                throw ToolError.storeFailure("PDFKit could not write to \(output.path)")
+                throw ToolError.storeFailure("PDFKit could not write to \(ToolStandard.echo(output.path))")
             }
         } else {
             try write(document, to: output)
@@ -387,7 +394,7 @@ public struct SystemPDFStore: PDFStore {
         ]
         if let userPassword { options[.userPasswordOption] = userPassword }
         guard document.write(to: URL(fileURLWithPath: output.path), withOptions: options) else {
-            throw ToolError.storeFailure("PDFKit could not write to \(output.path)")
+            throw ToolError.storeFailure("PDFKit could not write to \(ToolStandard.echo(output.path))")
         }
     }
 
@@ -570,7 +577,7 @@ public struct SystemPDFStore: PDFStore {
             try data.write(to: URL(fileURLWithPath: output.path))
         } catch {
             throw ToolError.storeFailure(
-                "could not write \(output.path): \(error.localizedDescription)")
+                "could not write \(ToolStandard.echo(output.path))")
         }
     }
 
@@ -649,7 +656,7 @@ public struct SystemPDFStore: PDFStore {
 
     private func write(_ document: PDFDocument, to output: WriteScopedPath) throws {
         guard document.write(to: URL(fileURLWithPath: output.path)) else {
-            throw ToolError.storeFailure("PDFKit could not write to \(output.path)")
+            throw ToolError.storeFailure("PDFKit could not write to \(ToolStandard.echo(output.path))")
         }
     }
 
