@@ -125,8 +125,12 @@ finished searching and highlighting.
 ### 1. Build the bundle
 
 ```bash
-MCPB_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./scripts/pack.sh
+security find-identity -v -p codesigning   # copy the 40-character hash of an Apple Development or Developer ID Application identity
+MCPB_SIGN_IDENTITY="<identity hash>" ./scripts/pack.sh
 ```
+
+Pass the hash, not the certificate's name: `pack.sh` prints the identity it signs with,
+and the name is yours.
 
 Produces `dist/apple-pdf-mcp.mcpb`. The script checks its own work and fails loudly rather
 than shipping something that would silently refuse to run.
@@ -171,7 +175,7 @@ locally with your own identity is what makes the permission stick.
 ### Preparing something to distribute
 
 ```bash
-MCPB_HARDENED=1 MCPB_SIGN_IDENTITY="Developer ID Application: …" ./scripts/pack.sh
+MCPB_HARDENED=1 MCPB_SIGN_IDENTITY="<Developer ID Application hash>" ./scripts/pack.sh
 ```
 
 Adds the hardened runtime and a secure timestamp, which notarisation requires. This server
